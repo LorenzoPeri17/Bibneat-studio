@@ -1,0 +1,3 @@
+[submodule "bibneat"]
+	path = bibneat
+	url = git@github.com:LorenzoPeri17/bibneat.git
