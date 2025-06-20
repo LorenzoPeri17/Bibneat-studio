@@ -1,41 +1,78 @@
-#root {
-  max-width: 100vw;
+/* Reset default margins and set proper padding */
+* {
   margin: 0;
   padding: 0;
-  text-align: left;
+  box-sizing: border-box;
 }
 
-.app-container {
-  display: flex;
-  flex-direction: row;
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
   height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Make app-container use grid for better scaling */
+.app-container {
+  display: grid;
+  grid-template-columns: minmax(332px, 372px) minmax(0, 1fr) minmax(332px, 372px);
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
   font-family: system-ui, sans-serif;
   background: #181a1b;
+  overflow: hidden;
+  position: relative;
 }
 
 .side-panel {
-  width: 260px;
+  min-width: 300px;
+  max-width: 340px;
+  width: 100%;
   background: #232526;
   padding: 24px 16px;
   border-right: 1px solid #222325;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 5px;
   color: #d3d3d3;
+  overflow-y: auto;
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  box-sizing: border-box;
+  justify-self: center;
 }
 .side-panel.actions {
   border-left: 1px solid #222325;
   border-right: none;
+  justify-self: center;
+  width: 100%;
+  gap: 12px;
 }
 
 .main-panel {
-  flex: 1;
-  padding: 32px 24px;
+  box-sizing: border-box; /* Ensure padding is included in width calculation */
+  min-width: 0;
+  width: 100%;
+  /* padding: 32px 24px; */
+  padding: 30px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   background: #181a1b;
   color: #d3d3d3;
+  overflow: auto;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
 }
 
 .logo {
@@ -80,13 +117,15 @@
   border-radius: 8px;
   padding: 16px;
   min-height: 320px;
-  max-height: 60vh;
+  max-height: calc(100vh - 200px);
+  overflow-x: auto;
   overflow-y: auto;
   font-family: 'Fira Mono', 'Consolas', monospace;
   font-size: 1rem;
-  white-space: pre-wrap;
+  white-space: pre;
   margin-bottom: 12px;
   color: #d3d3d3;
+  position: relative;
 }
 
 .non-ascii {
@@ -156,4 +195,41 @@ hr {
 ::-webkit-scrollbar-thumb {
   background: #333;
   border-radius: 4px;
+}
+
+/* Updated styles for segmented control */
+.segmented-control {
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #232526;
+  border: 1px solid #444;
+  margin-bottom: 8px;
+  gap: 2px;
+}
+.segmented-control button {
+  width: 100%;
+  background: none;
+  border: none;
+  color: #d3d3d3;
+  padding: 6px 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.segmented-control button:not(:last-child) {
+  border-right: none;
+  border-bottom: 1px solid #444;
+}
+.segmented-control .seg-selected {
+  background: linear-gradient(90deg, #7a7fff 0%, #232526 100%);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+.segmented-control button:focus {
+  outline: none;
+  background: #333;
 }
