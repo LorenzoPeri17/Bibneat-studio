@@ -127,12 +127,25 @@ function highlightNonAscii(text) {
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = true;
-    script.onload = resolve;
-    script.onerror = reject;
-    document.body.appendChild(script);
+    // In Electron, we need to handle file paths differently for packaged apps
+    if (window.electronAPI) {
+      // We're in Electron - use a different approach
+      // For now, we'll try to load the script directly
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.body.appendChild(script);
+    } else {
+      // Regular web browser
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.body.appendChild(script);
+    }
   });
 }
 
@@ -166,15 +179,41 @@ function App() {
 
   const [preambleAdded, setPreambleAdded] = useState(false);
   const [logs, setLogs] = useState([]); // {type: 'info'|'warn'|'error', msg: string}
+  const [isProcessing, setIsProcessing] = useState(false); // Track if heavy operation is running
 
   // Load WASM on mount
   useEffect(() => {
-    loadScript('/wasm/bibneat.js').then(() => {
+    // Determine the correct path for WASM files
+    const getWasmPath = () => {
+      if (window.electronAPI) {
+        // We're in Electron - use relative path that works in packaged app
+        return './wasm/bibneat.js';
+      } else {
+        // Regular web browser - use absolute path
+        return '/wasm/bibneat.js';
+      }
+    };
+
+    const wasmJsPath = getWasmPath();
+    
+    loadScript(wasmJsPath).then(() => {
       if (typeof window.createBibneatModule !== 'function') {
         setMessage('Malformed bibneat module :(');
         return;
       }
-      window.createBibneatModule({ locateFile: () => '/wasm/bibneat.wasm' }).then(instance => {
+      
+      // Configure the WASM module with the correct path
+      const locateFile = (path) => {
+        if (window.electronAPI) {
+          // In Electron, use relative path
+          return `./wasm/${path}`;
+        } else {
+          // In browser, use absolute path
+          return `/wasm/${path}`;
+        }
+      };
+      
+      window.createBibneatModule({ locateFile }).then(instance => {
         wasmRef.current = instance;
         setWasmLoaded(true);
         resetDB();
@@ -209,7 +248,7 @@ function App() {
     setMessage('Good as new!');
   }
 
-  // Load a .bib file
+  // Load a .bib file - now async
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -217,30 +256,50 @@ function App() {
     const text = await file.text();
     if (wasmRef.current) {
       try {
+        setIsProcessing(true);
+        setMessage(`Parsing ${file.name}...`);
+        // Yield to UI thread before heavy parsing operation
+        await yieldToUI();
+        
         parserRef.current.parseString(text);
+        
+        // Yield again before updating UI
+        await yieldToUI();
+        
         setBibText(printerRef.current.toString());
         setMessage('Bibliography loaded!');
         addLog('Loaded file ' + file.name, 'info');
       } catch (err) {
         setMessage('Failed to parse .bib file :(');
         addLog('Failed to parse ' + file.name, 'error');
+      } finally {
+        setIsProcessing(false);
       }
     } else {
       setBibText(text);
     }
   };
 
-  // Add entry from textarea
-  const handleAddEntry = () => {
+  // Add entry from textarea - now async
+  const handleAddEntry = async () => {
     if (!wasmRef.current) return setMessage('WASM not loaded!');
     try {
+      setIsProcessing(true);
+      setMessage('Adding entry...');
+      await yieldToUI();
+      
       parserRef.current.parseString(entryText);
+      
+      await yieldToUI();
+      
       setBibText(printerRef.current.toString());
       setMessage('Entry added!');
       addLog('Added entry!', 'info');
     } catch (err) {
       setMessage('Failed to add entry :(');
       addLog('Failed to add entry', 'error');
+    } finally {
+      setIsProcessing(false);
     }
     setEntryText('');
   };
@@ -265,6 +324,10 @@ function App() {
     if (!wasmRef.current) return setMessage('WASM not loaded!');
     if (!arxivId) return;
     try {
+      setIsProcessing(true);
+      setMessage('Fetching arXiv entry...');
+      await yieldToUI();
+      
       const prepId = apiCallRef.current.getPrepArXiv(arxivId);
       const response = await apiHelperRef.current.fetchArXiv(prepId);
       if (response.code !== RequestCode.FOUND) {
@@ -273,6 +336,10 @@ function App() {
         setArxivId('');
         return; 
       }
+      
+      setMessage('Processing arXiv entry...');
+      await yieldToUI();
+      
       const maybeDOI = apiCallRef.current.addFromArXivResponseAndGetDoi(response.data);
       if((maybeDOI.keys().size() > 0)){
         if((immediateArxivFollow)){
@@ -293,6 +360,8 @@ function App() {
     } catch (err) {
       setMessage('Failed to add entry from arXiv :(');
       addLog('Failed to add arXiv entry: ' + arxivId, 'error');
+    } finally {
+      setIsProcessing(false);
     }
     setArxivId('');
   };
@@ -302,6 +371,10 @@ function App() {
     if (!wasmRef.current) return setMessage('WASM not loaded!');
     if (!doi) return;
     try {
+      setIsProcessing(true);
+      setMessage('Fetching DOI entry...');
+      await yieldToUI();
+      
       const prepDOI = apiCallRef.current.getPrepDOI(doi);
       const response = await apiHelperRef.current.fetchDOI(prepDOI);
       if (response.code !== RequestCode.FOUND) {
@@ -310,12 +383,18 @@ function App() {
           setDoi('');
           return; 
       }
+      
+      setMessage('Processing DOI entry...');
+      await yieldToUI();
+      
       apiCallRef.current.addFromDOIResponse(response.data);
       setMessage('Entry added!');
       addLog('Added DOI entry: ' + doi, 'info');
     } catch (err) {
       setMessage('Failed to add entry from DOI :(');
       addLog('Failed to add DOI entry: ' + doi, 'error');
+    } finally {
+      setIsProcessing(false);
     }
     refresh();
     setDoi('');
@@ -329,7 +408,7 @@ function App() {
     const blob = new Blob([bibOut], { type: 'text/plain' });
     const exporter = document.createElement('a');
     exporter.href = URL.createObjectURL(blob);
-    exporter.download = fileName ? `neat_${fileName}` : 'bibneat.bib';
+    exporter.download = fileName ? fileName.split('.')[0]+'_neat.bib' : 'bibneat.bib';
     exporter.click();
     setMessage('Exported!');
     addLog('Exported bibliography', 'info');
@@ -344,7 +423,10 @@ function App() {
       const doi = maybeMapIndexDoi.get(index);
       promises.push(apiHelperRef.current.fetchDOI(doi));
     }
-    await Promise.all(promises).then((responses) => {
+    
+    await Promise.all(promises).then(async (responses) => {
+      await yieldToUI(); // Yield before heavy WASM processing
+      
       const vecIdx = new wasmRef.current.Uint64Vector();
       const vecTex = new wasmRef.current.StringVector();
       for(var idx = 0; idx<numEntries; idx++){
@@ -362,7 +444,9 @@ function App() {
           }
         }
       }
+      
       if(arxivReplace) {
+        await yieldToUI(); // Yield before final WASM operation
         apiCallRef.current.updateDOIFromResponse(vecIdx, vecTex);
       }
     });
@@ -370,6 +454,11 @@ function App() {
 
   const handleArxivCheck = async () => {
     if (!wasmRef.current) return setMessage('WASM not loaded!');
+    
+    setIsProcessing(true);
+    setMessage('Checking arXiv entries...');
+    await yieldToUI();
+    
     const mapIndexArxiv = apiCallRef.current.getArXivIds();
     const indexKeys = mapIndexArxiv.keys();
     const numEntries = indexKeys.size();
@@ -379,7 +468,11 @@ function App() {
       const arxivId = mapIndexArxiv.get(index);
       promises.push(apiHelperRef.current.fetchArXiv(arxivId));
     }
+    
+    setMessage('Processing arXiv responses...');
     await Promise.all(promises).then(async (responses) => {
+      await yieldToUI(); // Yield before heavy WASM processing
+      
       const vecIdx = new wasmRef.current.Uint64Vector();
       const vecTex = new wasmRef.current.StringVector();
       for(var idx = 0; idx<numEntries; idx++){
@@ -393,6 +486,9 @@ function App() {
           addLog('Entry ' + key + ' not found on arxiv.org', 'error');
         }
       }
+      
+      await yieldToUI(); // Yield before more WASM processing
+      
       const mapIndexDoi = apiCallRef.current.updateArXivFromResponseAndGetDOIs(vecIdx, vecTex, arxivReplace);
       if (arxivFollow){
         await handleArxivFollow(mapIndexDoi);
@@ -400,10 +496,16 @@ function App() {
     });
     setMessage('arxiv.org says hi :)');
     refresh();
+    setIsProcessing(false);
   }
 
   const handleDOICheck = async () =>{
     if (!wasmRef.current) return setMessage('WASM not loaded!');
+    
+    setIsProcessing(true);
+    setMessage('Checking DOI entries...');
+    await yieldToUI();
+    
     const mapIndexDoi = apiCallRef.current.getDOIs();
     const indexKeys = mapIndexDoi.keys();
     const numEntries = indexKeys.size();
@@ -413,7 +515,11 @@ function App() {
       const doi = mapIndexDoi.get(index);
       promises.push(apiHelperRef.current.fetchDOI(doi));
     }
-    await Promise.all(promises).then((responses) => {
+    
+    setMessage('Processing DOI responses...');
+    await Promise.all(promises).then(async (responses) => {
+      await yieldToUI(); // Yield before heavy WASM processing
+      
       const vecIdx = new wasmRef.current.Uint64Vector();
       const vecTex = new wasmRef.current.StringVector();
       for(var idx = 0; idx<numEntries; idx++){
@@ -427,58 +533,96 @@ function App() {
           addLog('Entry ' + key + ' not found on doi.org', 'error');
         }
       }
+      
+      await yieldToUI(); // Yield before more WASM processing
+      
       if(doiReplace){
         apiCallRef.current.updateDOIFromResponse(vecIdx, vecTex)
       }
     });
     setMessage('doi.org says hi :)');
     refresh();
+    setIsProcessing(false);
   }
 
-  // Action buttons
-  const handleAction = (action) => {
+  // Helper function to yield control back to the UI thread
+  const yieldToUI = () => new Promise(resolve => setTimeout(resolve, 0));
+
+  // Helper function to run heavy WASM operations asynchronously
+  const runAsyncWasmOperation = async (operation, progressMessage, successMessage, successLog) => {
     if (!wasmRef.current) return setMessage('WASM not loaded!');
     if (!bibDbRef.current) return setMessage('Load or create a bibliography first!');
+    
     try {
-      switch (action) {
-        case 'normalize':
-          if (normMode === 'canonical') {
-            setMessage('Working on it!');
-            fieldNormalizerRef.current.NFCNormalize();
-            setMessage('Canonical normalization applied!');
-            addLog('Canonical normalization applied!', 'info');
-          } else if (normMode === 'compat') {
-            setMessage('Working on it!');
-            fieldNormalizerRef.current.NFKCNormalize();
-            setMessage('Compatibility normalization applied!');
-            addLog('Compatibility normalization applied!', 'info');
-          } else if (normMode === 'unicode2latex') {
-            setMessage('Working on it!');
-            fieldNormalizerRef.current.uni2latex();
-            setMessage('Unicode to LaTeX conversion applied!');
-            addLog('Unicode to LaTeX conversion applied!', 'info');
-          }
-          setBibText(printerRef.current.toString());
-          break;
-        case 'filter':
-          fieldFilterRef.current.keepBibTex();
-          setBibText(printerRef.current.toString());
-          setMessage('Non-BibTeX fields gone!');
-          addLog('Non-BibTeX fields gone!', 'info');
-          break;
-        case 'preamble':
-          fieldNormalizerRef.current.addUTF8Preamble();
-          setPreambleAdded(true);
-          setMessage('Encoding preamble added!');
-          addLog('Encoding preamble added!', 'info');
-          break;
-        default:
-          break;
-      }
+      setIsProcessing(true);
+      setMessage(progressMessage);
+      // Yield to UI thread before starting heavy operation
+      await yieldToUI();
+      
+      // Run the heavy operation
+      operation();
+      
+      // Yield again before updating UI
+      await yieldToUI();
+      
       setBibText(printerRef.current.toString());
+      setMessage(successMessage);
+      addLog(successLog, 'info');
     } catch (err) {
-      setMessage('Action failed.');
-      addLog('Action failed.', 'error');
+      console.error('WASM operation failed:', err);
+      setMessage('Operation failed.');
+      addLog('Operation failed.', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Action buttons - now async
+  const handleAction = async (action) => {
+    switch (action) {
+      case 'normalize':
+        if (normMode === 'canonical') {
+          await runAsyncWasmOperation(
+            () => fieldNormalizerRef.current.NFCNormalize(),
+            'Applying canonical normalization...',
+            'Canonical normalization applied!',
+            'Canonical normalization applied!'
+          );
+        } else if (normMode === 'compat') {
+          await runAsyncWasmOperation(
+            () => fieldNormalizerRef.current.NFKCNormalize(),
+            'Applying compatibility normalization...',
+            'Compatibility normalization applied!',
+            'Compatibility normalization applied!'
+          );
+        } else if (normMode === 'unicode2latex') {
+          await runAsyncWasmOperation(
+            () => fieldNormalizerRef.current.uni2latex(),
+            'Converting Unicode to LaTeX...',
+            'Unicode to LaTeX conversion applied!',
+            'Unicode to LaTeX conversion applied!'
+          );
+        }
+        break;
+      case 'filter':
+        await runAsyncWasmOperation(
+          () => fieldFilterRef.current.keepBibTex(),
+          'Filtering non-BibTeX fields...',
+          'Non-BibTeX fields gone!',
+          'Non-BibTeX fields gone!'
+        );
+        break;
+      case 'preamble':
+        await runAsyncWasmOperation(
+          () => fieldNormalizerRef.current.addUTF8Preamble(),
+          'Adding encoding preamble...',
+          'Encoding preamble added!',
+          'Encoding preamble added!'
+        );
+        setPreambleAdded(true);
+        break;
+      default:
+        break;
     }
   };
 
@@ -508,7 +652,7 @@ function App() {
           onChange={e => setEntryText(e.target.value)}
           rows={6}
         />
-        <button disabled={!wasmLoaded || !entryText} onClick={handleAddEntry}>Add Entry</button>
+        <button disabled={!wasmLoaded || !entryText || isProcessing} onClick={handleAddEntry}>Add Entry</button>
         <hr />
         <input
           type="text"
@@ -528,7 +672,7 @@ function App() {
             Prefer published version if available
           </label>
         </div>
-        <button disabled={!wasmLoaded || !arxivId} onClick={handleAddArxiv}>Add from arXiv</button>
+        <button disabled={!wasmLoaded || !arxivId || isProcessing} onClick={handleAddArxiv}>Add from arXiv</button>
         <hr />
         <input
           type="text"
@@ -536,7 +680,7 @@ function App() {
           value={doi}
           onChange={e => setDoi(e.target.value)}
         />
-        <button disabled={!wasmLoaded || !doi} onClick={handleAddDoi}>Add from DOI</button>
+        <button disabled={!wasmLoaded || !doi || isProcessing} onClick={handleAddDoi}>Add from DOI</button>
         <hr />
         <div className="logs-section">
           {logs.length === 0 && <div style={{color:'#888',fontSize:'0.95em'}}>No news! Good news?</div>}
@@ -549,8 +693,8 @@ function App() {
         <div className="bibliography-header">
           <h2>Bibliography</h2>
           <div className="action-buttons-container">
-            <button className="export-button" onClick={handleExport}>Export to .bib file</button>
-            <button className="reset-button" onClick={handleResetDB}>Reset Database</button>
+            <button disabled={isProcessing} className="export-button" onClick={handleExport}>Export to .bib file</button>
+            <button disabled={isProcessing} className="reset-button" onClick={handleResetDB}>Reset Database</button>
           </div>
         </div>
         <div
@@ -558,6 +702,7 @@ function App() {
           dangerouslySetInnerHTML={{ __html: highlightNonAscii(bibText) }}
         />
         {message && <div style={{marginTop: 12, color: '#7a7fff'}}>{message}</div>}
+        {isProcessing && <div style={{marginTop: 8, color: '#ff9800', fontSize: '0.9em', fontStyle: 'italic'}}>⚡ Processing...</div>}
       </main>
       <aside className="side-panel actions">
         <div>
@@ -580,8 +725,8 @@ function App() {
             >Unicode2LaTeX</button>
           </div>
         </div>
-        <button onClick={() => handleAction('normalize')}>Fix unicode</button>
-        <button disabled={preambleAdded} onClick={() => handleAction('preamble')}>Add Encoding Preamble</button>
+        <button disabled={isProcessing} onClick={() => handleAction('normalize')}>Fix unicode</button>
+        <button disabled={preambleAdded || isProcessing} onClick={() => handleAction('preamble')}>Add Encoding Preamble</button>
         <hr />
         <div>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>arXiv Check Mode</div>
@@ -617,7 +762,7 @@ function App() {
             </label>
           </div>
         </div>
-        <button onClick={() => handleArxivCheck()}>Check arXiv</button>
+        <button disabled={isProcessing} onClick={() => handleArxivCheck()}>Check arXiv</button>
         <hr />
         <div>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>DOI Check Mode</div>
@@ -634,9 +779,9 @@ function App() {
             >Replace</button>
           </div>
         </div>
-        <button onClick={() => handleDOICheck()}>Check DOI</button>
+        <button disabled={isProcessing} onClick={() => handleDOICheck()}>Check DOI</button>
         <hr />
-        <button onClick={() => handleAction('filter')}>Remove non-BibTeX fields</button>
+        <button disabled={isProcessing} onClick={() => handleAction('filter')}>Remove non-BibTeX fields</button>
       </aside>
     </div>
   );

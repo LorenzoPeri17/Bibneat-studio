@@ -1,4 +1,12 @@
 copilot-instructions.md
+.copilot-notes
+
+# Output
+out
+
+# Editor
+*.afdesign
+*.afdesign*
 
 # Logs
 logs

@@ -2,11 +2,10 @@
 // This file will launch the React frontend and set up the Electron window.
 // WASM integration and IPC will be added in later steps.
 
-import { app, BrowserWindow, ipcMain } from 'electron';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import https from 'https';
-import http from 'http';
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+const https = require('https');
+const http = require('http');
 
 // Register proxy-fetch handler at the top level
 ipcMain.handle('proxy-fetch', async (event, url, options = {}) => {
@@ -28,25 +27,29 @@ ipcMain.handle('proxy-fetch', async (event, url, options = {}) => {
   });
 });
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 function createWindow() {
   const win = new BrowserWindow({
     width: 1450,
     height: 950,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'), // Use CommonJS preload
+      preload: path.join(__dirname, 'preload.js'), // Vite always outputs .js for both dev and production
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
   // Load the Vite dev server in development, or the built index.html in production
-  if (process.env.NODE_ENV === 'development') {
+  if (!app.isPackaged && process.env.NODE_ENV === 'development') {
+    // Development mode - load from Vite dev server
     win.loadURL('http://localhost:5173');
   } else {
-    win.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    // Production mode - load from built files
+    win.loadFile(path.join(__dirname, '..', 'renderer', 'main_window', 'index.html'));
+  }
+  
+  // Create additional resource paths in production mode
+  if (process.env.NODE_ENV === 'production') {
+    console.log('Setting up WASM paths for production build...');
   }
 }
 
