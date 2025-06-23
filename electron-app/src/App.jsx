@@ -1,7 +1,125 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import './App.css';
 
 import {ApiHelper, RequestCode} from './utils/apiHelper';
+
+// LogMessage component with popup functionality
+const LogMessage = ({ message, type }) => {
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
+  const logRef = useRef(null);
+  const popupRef = useRef(null);
+  const timerRef = useRef(null);
+
+  const handleMouseEnter = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const width = Math.max(300, rect.width * 1.5);
+    
+    // Calculate initial position
+    let top = rect.top;
+    let left = rect.left;
+    
+    // Clear any existing timer
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    
+    // Set a delay of 500ms (half a second) before showing the popup
+    timerRef.current = setTimeout(() => {
+      // Update position right before showing to ensure it's current
+      // This ensures we have the most accurate viewport size
+      const viewportHeight = window.innerHeight;
+      const estimatedPopupHeight = Math.min(300, message.length / 2); // Rough estimate
+      
+      // If popup would go below viewport, position it above the log message
+      if (top + estimatedPopupHeight > viewportHeight - 20) {
+        top = Math.max(10, top - estimatedPopupHeight - 10);
+      }
+      
+      // Make sure left position doesn't push it off-screen
+      if (left + width > window.innerWidth - 20) {
+        left = window.innerWidth - width - 20;
+      }
+      
+      setPopupPosition({
+        top,
+        left,
+        width,
+      });
+      
+      setShowPopup(true);
+    }, 750);
+  };
+
+  const handleMouseLeave = () => {
+    // Clear the timer if mouse leaves before popup is shown
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    setShowPopup(false);
+  };
+  
+  // Clean up the timer when component unmounts
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
+  // Effect to adjust popup position after it's rendered
+  useEffect(() => {
+    if (showPopup && popupRef.current) {
+      const popup = popupRef.current;
+      const popupRect = popup.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      
+      // Check if popup extends below viewport and adjust if needed
+      if (popupRect.bottom > viewportHeight - 10) {
+        const newTop = Math.max(10, viewportHeight - popupRect.height - 10);
+        popup.style.top = `${newTop}px`;
+      }
+      
+      // Check if popup extends past right edge
+      if (popupRect.right > viewportWidth - 10) {
+        const newLeft = Math.max(10, viewportWidth - popupRect.width - 10);
+        popup.style.left = `${newLeft}px`;
+      }
+    }
+  }, [showPopup]);
+
+  return (
+    <>
+      <div
+        ref={logRef}
+        className={`log-message log-${type}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {message}
+      </div>
+      {showPopup && createPortal(
+        <div 
+          ref={popupRef}
+          className={`log-popup log-${type}`}
+          style={{
+            top: `${popupPosition.top - 5}px`,
+            left: `${popupPosition.left - 5}px`,
+            width: `${popupPosition.width}px`
+          }}
+          onMouseEnter={() => setShowPopup(true)}
+          onMouseLeave={() => setShowPopup(false)}
+        >
+          {message}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
 
 function highlightNonAscii(text) {
   return text.replace(/([\u0080-\uFFFF])/g, '<span class="non-ascii">$1</span>');
@@ -49,6 +167,7 @@ function App() {
   apiHelperRef.current = new ApiHelper();
 
   const [preambleAdded, setPreambleAdded] = useState(false);
+  const [logs, setLogs] = useState([]); // {type: 'info'|'warn'|'error', msg: string}
 
   // Load WASM on mount
   useEffect(() => {
@@ -87,6 +206,7 @@ function App() {
   const handleResetDB = () => {
     bibDbRef.current.delete();
     resetDB();
+    clearLogs();
     setBibText("");
     setMessage('Good as new!');
   }
@@ -102,8 +222,10 @@ function App() {
         parserRef.current.parseString(text);
         setBibText(printerRef.current.toString());
         setMessage('Bibliography loaded!');
+        addLog('Loaded file ' + file.name, 'info');
       } catch (err) {
         setMessage('Failed to parse .bib file :(');
+        addLog('Failed to parse ' + file.name, 'error');
       }
     } else {
       setBibText(text);
@@ -117,8 +239,10 @@ function App() {
       parserRef.current.parseString(entryText);
       setBibText(printerRef.current.toString());
       setMessage('Entry added!');
+      addLog('Added entry!', 'info');
     } catch (err) {
       setMessage('Failed to add entry :(');
+      addLog('Failed to add entry', 'error');
     }
     setEntryText('');
   };
@@ -147,19 +271,30 @@ function App() {
       const response = await apiHelperRef.current.fetchArXiv(prepId);
       if (response.code !== RequestCode.FOUND) {
         setMessage('Could not found the arXiv entry you are looking for :(');
+        addLog('Could not find arXiv entry: ' + arxivId, 'error');
         setArxivId('');
         return; 
       }
       const maybeDOI = apiCallRef.current.addFromArXivResponseAndGetDoi(response.data);
-      if((immediateArxivFollow) && (maybeDOI.keys().size() > 0)){
-        await handleImmediateFollow(maybeDOI);
-        maybeDOI.delete();
+      if((maybeDOI.keys().size() > 0)){
+        if((immediateArxivFollow)){
+          await handleImmediateFollow(maybeDOI);
+        addLog('ArXiv entry ' + arxivId + ' replaced with published version', 'info');
+        } else{
+          const index =  maybeDOI.keys().get(0);
+          const doi = maybeDOI.get(index);
+          const key = apiCallRef.current.getBibKeysFromIndex(index);
+          addLog('Entry ' + key + ' has been published with DOI:\n'+doi+'\nPlease consider replacing with published version.', 'warn');
+        }
       } else{
-        setMessage('ArXiv entry added!');
+        addLog('Added arXiv entry: ' + arxivId, 'info');
       }
+      maybeDOI.delete();
+      setMessage('ArXiv entry added!');
       refresh();
     } catch (err) {
       setMessage('Failed to add entry from arXiv :(');
+      addLog('Failed to add arXiv entry: ' + arxivId, 'error');
     }
     setArxivId('');
   };
@@ -173,13 +308,16 @@ function App() {
       const response = await apiHelperRef.current.fetchDOI(prepDOI);
       if (response.code !== RequestCode.FOUND) {
           setMessage('Could not found the entry you are looking for :(');
+          addLog('Could not find DOI entry: ' + doi, 'error');
           setDoi('');
           return; 
       }
       apiCallRef.current.addFromDOIResponse(response.data);
       setMessage('Entry added!');
+      addLog('Added DOI entry: ' + doi, 'info');
     } catch (err) {
       setMessage('Failed to add entry from DOI :(');
+      addLog('Failed to add DOI entry: ' + doi, 'error');
     }
     refresh();
     setDoi('');
@@ -196,6 +334,7 @@ function App() {
     exporter.download = fileName ? `neat_${fileName}` : 'bibneat.bib';
     exporter.click();
     setMessage('Exported!');
+    addLog('Exported bibliography', 'info');
   };
 
   const setArxivCheckState = (mode) => {
@@ -221,8 +360,6 @@ function App() {
   const handleArxivFollow = async (maybeMapIndexDoi) => {
     const indexKeys = maybeMapIndexDoi.keys();
     const numEntries = indexKeys.size();
-    console.log(numEntries)
-    console.log("follow")
     var promises = [];
     for(var idx = 0; idx<numEntries; idx++){
       const index = indexKeys.get(idx);
@@ -230,19 +367,26 @@ function App() {
       promises.push(apiHelperRef.current.fetchDOI(doi));
     }
     await Promise.all(promises).then((responses) => {
-      if(!arxivReplace){return;}
       const vecIdx = new wasmRef.current.Uint64Vector();
       const vecTex = new wasmRef.current.StringVector();
       for(var idx = 0; idx<numEntries; idx++){
         const response = responses.at(idx);
         const index = indexKeys.get(idx);
+        const key = apiCallRef.current.getBibKeysFromIndex(index);
         if(response.code === RequestCode.FOUND){
-          vecIdx.push_back(index);
-          vecTex.push_back(response.data);
-          console.log("F", index);
+          if(arxivReplace){
+            vecIdx.push_back(index);
+            vecTex.push_back(response.data);
+            addLog('Entry ' + key + ' replaced with published version', 'info');
+          } else {
+            const doi = maybeMapIndexDoi.get(index);
+            addLog('Entry ' + key + ' has been published with DOI:\n'+doi+'\nPlease consider replacing with published version.', 'warn');
+          }
         }
       }
-      apiCallRef.current.updateDOIFromResponse(vecIdx, vecTex);
+      if(arxivReplace) {
+        apiCallRef.current.updateDOIFromResponse(vecIdx, vecTex);
+      }
     });
   }
 
@@ -257,7 +401,6 @@ function App() {
       const arxivId = mapIndexArxiv.get(index);
       promises.push(apiHelperRef.current.fetchArXiv(arxivId));
     }
-    console.log(numEntries)
     await Promise.all(promises).then(async (responses) => {
       const vecIdx = new wasmRef.current.Uint64Vector();
       const vecTex = new wasmRef.current.StringVector();
@@ -267,11 +410,12 @@ function App() {
         if(response.code === RequestCode.FOUND){
           vecIdx.push_back(index);
           vecTex.push_back(response.data);
-          console.log("A", index);
+        } else {
+          const key = apiCallRef.current.getBibKeysFromIndex(index);
+          addLog('Entry ' + key + ' not found on arxiv.org', 'error');
         }
       }
       const mapIndexDoi = apiCallRef.current.updateArXivFromResponseAndGetDOIs(vecIdx, vecTex, arxivReplace);
-      console.log("REPL", arxivReplace)
       if (arxivFollow){
         await handleArxivFollow(mapIndexDoi);
       }
@@ -281,12 +425,10 @@ function App() {
   }
 
   const handleDOICheck = async () =>{
-    console.log("hey")
     if (!wasmRef.current) return setMessage('WASM not loaded!');
     const mapIndexDoi = apiCallRef.current.getDOIs();
     const indexKeys = mapIndexDoi.keys();
     const numEntries = indexKeys.size();
-    console.log(numEntries)
     var promises = [];
     for(var idx = 0; idx<numEntries; idx++){
       const index = indexKeys.get(idx);
@@ -294,7 +436,6 @@ function App() {
       promises.push(apiHelperRef.current.fetchDOI(doi));
     }
     await Promise.all(promises).then((responses) => {
-      if(!doiReplace){return;}
       const vecIdx = new wasmRef.current.Uint64Vector();
       const vecTex = new wasmRef.current.StringVector();
       for(var idx = 0; idx<numEntries; idx++){
@@ -303,9 +444,14 @@ function App() {
         if(response.code === RequestCode.FOUND){
           vecIdx.push_back(index);
           vecTex.push_back(response.data);
+        } else {
+          const key = apiCallRef.current.getBibKeysFromIndex(index);
+          addLog('Entry ' + key + ' not found on doi.org', 'error');
         }
       }
-      apiCallRef.current.updateDOIFromResponse(vecIdx, vecTex)
+      if(doiReplace){
+        apiCallRef.current.updateDOIFromResponse(vecIdx, vecTex)
+      }
     });
     setMessage('doi.org says hi :)');
     refresh();
@@ -321,24 +467,29 @@ function App() {
           if (normMode === 'canonical') {
             fieldNormalizerRef.current.NFCNormalize();
             setMessage('Canonical normalization applied!');
+            addLog('Canonical normalization applied!', 'info');
           } else if (normMode === 'compat') {
             fieldNormalizerRef.current.NFKCNormalize();
             setMessage('Compatibility normalization applied!');
+            addLog('Compatibility normalization applied!', 'info');
           } else if (normMode === 'unicode2latex') {
             fieldNormalizerRef.current.uni2latex();
-            setMessage('Unicode to LaTeX applied!');
+            setMessage('Unicode to LaTeX conversion applied!');
+            addLog('Unicode to LaTeX conversion applied!', 'info');
           }
           setBibText(printerRef.current.toString());
           break;
         case 'filter':
           fieldFilterRef.current.keepBibTex();
           setBibText(printerRef.current.toString());
-          setMessage('Done!');
+          setMessage('Non-BibTeX fields gone!');
+          addLog('Non-BibTeX fields gone!', 'info');
           break;
         case 'preamble':
           fieldNormalizerRef.current.addUTF8Preamble();
           setPreambleAdded(true);
           setMessage('Encoding preamble added!');
+          addLog('Encoding preamble added!', 'info');
           break;
         default:
           break;
@@ -346,8 +497,17 @@ function App() {
       setBibText(printerRef.current.toString());
     } catch (err) {
       setMessage('Action failed.');
+      addLog('Action failed.', 'error');
     }
   };
+
+  // Helper to add a log
+  const addLog = (msg, type = 'info') => {
+    setLogs(logs => [...logs.slice(-199), { msg, type }]); // keep last 200
+  };
+  const clearLogs = () => {
+    setLogs(logs => []); // keep last 100
+  }
 
   return (
     <div className="app-container">
@@ -398,6 +558,12 @@ function App() {
         <button disabled={!wasmLoaded || !doi} onClick={handleAddDoi}>Add from DOI</button>
         <hr />
         <button disabled={!wasmLoaded} onClick={handleResetDB}>Reset Database</button>
+        <div className="logs-section">
+          {logs.length === 0 && <div style={{color:'#888',fontSize:'0.95em'}}>No news! Good news?</div>}
+          {logs.map((log, i) => (
+            <LogMessage key={i} message={log.msg} type={log.type} />
+          ))}
+        </div>
       </aside>
       <main className="main-panel">
         <h2>Bibliography</h2>

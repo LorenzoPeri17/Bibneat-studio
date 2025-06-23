@@ -37,7 +37,7 @@ body {
   max-width: 340px;
   width: 100%;
   background: #232526;
-  padding: 24px 16px;
+  padding: 24px 24px;
   border-right: 1px solid #222325;
   display: flex;
   flex-direction: column;
@@ -49,6 +49,7 @@ body {
   isolation: isolate;
   box-sizing: border-box;
   justify-self: center;
+  height: 100%;
 }
 .side-panel.actions {
   border-left: 1px solid #222325;
@@ -62,7 +63,6 @@ body {
   box-sizing: border-box; /* Ensure padding is included in width calculation */
   min-width: 0;
   width: 100%;
-  /* padding: 32px 24px; */
   padding: 30px;
   display: flex;
   flex-direction: column;
@@ -232,4 +232,93 @@ hr {
 .segmented-control button:focus {
   outline: none;
   background: #333;
+}
+
+.logs-section {
+  margin-top: 18px;
+  background: #181a1b;
+  border-top: 1px solid #333;
+  max-height: 250px;
+  min-height: 60px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 4px 4px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-family: 'Fira Mono', 'Consolas', 'Liberation Mono', monospace;
+  font-variant-ligatures: none;
+  font-size: 0.85em;
+  position: relative;
+}
+.log-message {
+  display: block;
+  width: calc(100% - 4px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 0.97em;
+  cursor: pointer;
+  background: transparent;
+  line-height: 1.4;
+  position: relative;
+  min-height: 2.2em; /* please allow a min-heigh so that logs don't shrink to zero */
+  margin: 1px 2px;
+  transition: background-color 0.2s ease-out, padding 0.2s ease-out;
+}
+.log-message.log-info {
+  color: #fff;
+}
+.log-message.log-warn {
+  color: #ffe066;
+}
+.log-message.log-error {
+  color: #ff6b6b;
+}
+.log-message:hover {
+  background: #232526;
+  border-radius: 4px;
+  padding-left: 8px;
+}
+
+/* Popup styles */
+.log-popup {
+  position: fixed;
+  background: #000;
+  color: #fff; /* Default color, will be overridden by log type classes */
+  padding: 10px 12px;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+  max-width: 600px;
+  font-family: 'Fira Mono', 'Consolas', 'Liberation Mono', monospace;
+  font-variant-ligatures: none;
+  font-size: 0.85em;
+  border: 1px solid #444;
+  animation: fadeIn 0.2s ease-out;
+  pointer-events: auto;
+}
+
+/* Inherit colors from log types */
+.log-popup.log-info {
+  color: #fff;
+  border-left: 3px solid #fff;
+}
+.log-popup.log-warn {
+  color: #ffe066;
+  border-left: 3px solid #ffe066;
+}
+.log-popup.log-error {
+  color: #ff6b6b;
+  border-left: 3px solid #ff6b6b;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
