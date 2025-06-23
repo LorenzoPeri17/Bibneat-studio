@@ -24,7 +24,7 @@ class ApiResult {
  * Helper class for making HTTP requests to external APIs
  * Will be extended to support DOI and arXiv specific endpoints
  */
-class ApiHelper {
+export class ApiHelper {
     constructor() {
         this.timeout = 20000; // 15 seconds timeout, matching C implementation
     }
@@ -75,17 +75,41 @@ class ApiHelper {
         }
     }
 
+    /**
+     * Fetch BibTeX from arXiv, using Electron main process proxy if available (to bypass CORS).
+     * @param {string} arXivId - The arXiv identifier
+     * @returns {Promise<ApiResult>}
+     */
     async fetchArXiv(arXivId) {
-        url = 'https://arxiv.org/bibtex/' + arXivId;
-        return this.fetchUrl(url)
+        const url = 'https://arxiv.org/bibtex/' + arXivId;
+        // If running in Electron and proxyFetch is available, use it
+        if (window.electronAPI && typeof window.electronAPI.proxyFetch === 'function') {
+            try {
+                const response = await window.electronAPI.proxyFetch(url);
+                if (response.status === 200) {
+                    return new ApiResult(RequestCode.FOUND, response.body);
+                } else if (response.status === 404) {
+                    return new ApiResult(RequestCode.NOT_FOUND);
+                } else {
+                    return new ApiResult(RequestCode.UNKNOWN_RESPONSE);
+                }
+            } catch (error) {
+                return new ApiResult(RequestCode.ERROR);
+            }
+        } else {
+            // Fallback: try fetch (will fail CORS in browser)
+            return this.fetchUrl(url);
+        }
     }
 
+    /**
+     * Fetch BibTeX from DOI.org, using fetch (CORS is allowed by doi.org)
+     * @param {string} doi - The DOI string
+     * @returns {Promise<ApiResult>}
+     */
     async fetchDOI(doi) {
-        url = 'https://doi.org/' + doi;
-        headers = {'Accept' : 'text/bibliography; style=bibtex; locale=en-GB'}
-        return this.fetchUrl(url, headers)
+        const url = 'https://doi.org/' + doi;
+        const headers = {'Accept' : 'text/bibliography; style=bibtex; locale=en-GB'};
+        return this.fetchUrl(url, headers);
     }
-
 }
-
-export default ApiHelper;

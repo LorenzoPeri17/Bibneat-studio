@@ -41,7 +41,7 @@ body {
   border-right: 1px solid #222325;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 1px;
   color: #d3d3d3;
   overflow-y: auto;
   position: relative;
@@ -55,7 +55,7 @@ body {
   border-right: none;
   justify-self: center;
   width: 100%;
-  gap: 12px;
+  gap: 1px;
 }
 
 .main-panel {
