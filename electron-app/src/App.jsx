@@ -150,8 +150,6 @@ function App() {
   const [arxivFollow, setArxivFollow] = useState(false);
   const [doiReplace, setDoiReplace] = useState(false);
   const [immediateArxivFollow, setImmediateArxivFollow] = useState(true);
-  const [arxivCheckMode, setArxivCheckMode] = useState('check'); // 'check', 'replace', 'follow'
-
 
   const fileInputRef = useRef();
   const wasmRef = useRef(null);
@@ -337,26 +335,6 @@ function App() {
     addLog('Exported bibliography', 'info');
   };
 
-  const setArxivCheckState = (mode) => {
-    setArxivCheckMode(mode);
-    switch (mode) {
-      case 'check':
-        setArxivReplace(false);
-        setArxivFollow(true);
-        break;
-      case 'replace':
-        setArxivReplace(true);
-        setArxivFollow(false);
-        break;
-      case 'follow':
-        setArxivReplace(true);
-        setArxivFollow(true);
-        break;
-      default:
-        break;
-    }
-  }
-
   const handleArxivFollow = async (maybeMapIndexDoi) => {
     const indexKeys = maybeMapIndexDoi.keys();
     const numEntries = indexKeys.size();
@@ -465,14 +443,17 @@ function App() {
       switch (action) {
         case 'normalize':
           if (normMode === 'canonical') {
+            setMessage('Working on it!');
             fieldNormalizerRef.current.NFCNormalize();
             setMessage('Canonical normalization applied!');
             addLog('Canonical normalization applied!', 'info');
           } else if (normMode === 'compat') {
+            setMessage('Working on it!');
             fieldNormalizerRef.current.NFKCNormalize();
             setMessage('Compatibility normalization applied!');
             addLog('Compatibility normalization applied!', 'info');
           } else if (normMode === 'unicode2latex') {
+            setMessage('Working on it!');
             fieldNormalizerRef.current.uni2latex();
             setMessage('Unicode to LaTeX conversion applied!');
             addLog('Unicode to LaTeX conversion applied!', 'info');
@@ -535,15 +516,15 @@ function App() {
           value={arxivId}
           onChange={e => setArxivId(e.target.value)}
         />
-        <div style={{ display: 'flex', alignItems: 'center', margin: '4px 0 8px 0' }}>
+        <div className={`checkbox-container ${!arxivId ? 'disabled' : ''}`}>
           <input
             type="checkbox"
             id="arxiv-follow-checkbox"
             checked={immediateArxivFollow}
             onChange={e => setImmediateArxivFollow(e.target.checked)}
-            style={{ marginRight: 6 }}
+            disabled={!arxivId}
           />
-          <label htmlFor="arxiv-follow-checkbox" style={{ fontSize: '0.95em', color: '#bbb', cursor: 'pointer' }}>
+          <label htmlFor="arxiv-follow-checkbox">
             Prefer published version if available
           </label>
         </div>
@@ -557,7 +538,6 @@ function App() {
         />
         <button disabled={!wasmLoaded || !doi} onClick={handleAddDoi}>Add from DOI</button>
         <hr />
-        <button disabled={!wasmLoaded} onClick={handleResetDB}>Reset Database</button>
         <div className="logs-section">
           {logs.length === 0 && <div style={{color:'#888',fontSize:'0.95em'}}>No news! Good news?</div>}
           {logs.map((log, i) => (
@@ -566,17 +546,22 @@ function App() {
         </div>
       </aside>
       <main className="main-panel">
-        <h2>Bibliography</h2>
+        <div className="bibliography-header">
+          <h2>Bibliography</h2>
+          <div className="action-buttons-container">
+            <button className="export-button" onClick={handleExport}>Export to .bib file</button>
+            <button className="reset-button" onClick={handleResetDB}>Reset Database</button>
+          </div>
+        </div>
         <div
           className="bib-viewer"
           dangerouslySetInnerHTML={{ __html: highlightNonAscii(bibText) }}
         />
-        <button style={{ marginTop: 16 }} onClick={handleExport}>Export .bib</button>
         {message && <div style={{marginTop: 12, color: '#7a7fff'}}>{message}</div>}
       </main>
       <aside className="side-panel actions">
-        <div style={{ margin: '0 0 0 0' }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Unicode Normalization</div>
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Unicode Normalization</div>
           <div className="segmented-control">
             <button
               className={normMode === 'canonical' ? 'seg-selected' : ''}
@@ -598,41 +583,55 @@ function App() {
         <button onClick={() => handleAction('normalize')}>Fix unicode</button>
         <button disabled={preambleAdded} onClick={() => handleAction('preamble')}>Add Encoding Preamble</button>
         <hr />
-        <div style={{ margin: '0 0 0 0' }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>arXiv Check Mode</div>
-          <div className="segmented-control">
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>arXiv Check Mode</div>
+          <div className={`switch-control ${arxivReplace ? 'right' : ''}`}>
             <button
-              className={arxivCheckMode === 'check' ? 'seg-selected' : ''}
-              onClick={() => setArxivCheckState('check')}
+              className={!arxivReplace ? 'active' : ''}
+              onClick={() => {
+                setArxivReplace(false);
+                setArxivFollow(true);
+              }}
               type="button"
-            >Check only</button>
+            >Check</button>
             <button
-              className={arxivCheckMode === 'replace' ? 'seg-selected' : ''}
-              onClick={() => setArxivCheckState('replace')}
+              className={arxivReplace ? 'active' : ''}
+              onClick={() => {
+                setArxivReplace(true);
+              }}
               type="button"
-            >Replace (stick to arXiv)</button>
-            <button
-              className={arxivCheckMode === 'follow' ? 'seg-selected' : ''}
-              onClick={() => setArxivCheckState('follow')}
-              type="button"
-            >Replace (prefer published)</button>
+            >Replace</button>
+          </div>
+          <div className={`checkbox-container ${!arxivReplace ? 'disabled' : ''}`}>
+            <input
+              type="checkbox"
+              id="arxiv-follow-pref-checkbox"
+              checked={arxivFollow}
+              onChange={e => {
+                setArxivFollow(e.target.checked);
+              }}
+              disabled={!arxivReplace}
+            />
+            <label htmlFor="arxiv-follow-pref-checkbox">
+              Prefer published version if available
+            </label>
           </div>
         </div>
         <button onClick={() => handleArxivCheck()}>Check arXiv</button>
         <hr />
-        <div style={{ margin: '0 0 0 0' }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>DOI Check Mode</div>
-          <div className="segmented-control">
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>DOI Check Mode</div>
+          <div className={`switch-control ${doiReplace ? 'right' : ''}`}>
             <button
-              className={(!doiReplace) ? 'seg-selected' : ''}
+              className={!doiReplace ? 'active' : ''}
               onClick={() => setDoiReplace(false)}
               type="button"
-            >Check only</button>
+            >Check</button>
             <button
-              className={doiReplace ? 'seg-selected' : ''}
+              className={doiReplace ? 'active' : ''}
               onClick={() => setDoiReplace(true)}
               type="button"
-            >Replace with DOI</button>
+            >Replace</button>
           </div>
         </div>
         <button onClick={() => handleDOICheck()}>Check DOI</button>
@@ -644,3 +643,4 @@ function App() {
 }
 
 export default App;
+

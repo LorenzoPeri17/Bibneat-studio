@@ -33,8 +33,8 @@ const __dirname = path.dirname(__filename);
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1250,
-    height: 900,
+    width: 1450,
+    height: 950,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'), // Use CommonJS preload
       nodeIntegration: false,
