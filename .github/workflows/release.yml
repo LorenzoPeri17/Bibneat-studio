@@ -3,9 +3,6 @@
 name: Build and Package Electron App
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -20,11 +17,13 @@ jobs:
         with:
           node-version: 20
       - name: Install dependencies
+        working-directory: './electron-app'
         run: npm ci
       - name: Build and package
+        working-directory: './electron-app'
         run: npm run make
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: bibneat-studio-${{ matrix.os }}
-          path: out/make/
+          path: electron-app/out/make
