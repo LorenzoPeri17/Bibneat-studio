@@ -1,6 +1,6 @@
 # Build and Package Bibneat Studio Electron App
 
-name: Build and Package Electron App
+name: Package App (windows)
 
 on:
   workflow_dispatch:
