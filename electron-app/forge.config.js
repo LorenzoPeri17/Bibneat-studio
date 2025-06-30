@@ -79,29 +79,6 @@ module.exports = {
           homepage: 'https://github.com/LorenzoPeri17/Bibneat-studio',
           repository: 'https://github.com/LorenzoPeri17/Bibneat-studio',
           // Flatpak runtime configuration
-          runtime: 'org.freedesktop.Platform',
-          runtimeVersion: '23.08',
-          sdk: 'org.freedesktop.Sdk',
-          modules: [
-            {
-              name: 'bibneat-studio',
-              buildsystem: 'simple',
-              'build-commands': [
-                'cp -r . /app/bibneat-studio/',
-                'install -Dm644 ./assets/icons/png/512x512.png /app/share/icons/hicolor/512x512/apps/com.bibneat.studio.png',
-                'install -Dm644 ./assets/icons/png/256x256.png /app/share/icons/hicolor/256x256/apps/com.bibneat.studio.png',
-                'install -Dm644 ./assets/icons/png/128x128.png /app/share/icons/hicolor/128x128/apps/com.bibneat.studio.png',
-                'install -Dm644 ./assets/icons/png/64x64.png /app/share/icons/hicolor/64x64/apps/com.bibneat.studio.png',
-                'install -Dm644 ./assets/icons/png/32x32.png /app/share/icons/hicolor/32x32/apps/com.bibneat.studio.png'
-              ],
-              sources: [
-                {
-                  type: 'dir',
-                  path: '.'
-                }
-              ]
-            }
-          ]
         }
       },
       platforms: ['linux'],
