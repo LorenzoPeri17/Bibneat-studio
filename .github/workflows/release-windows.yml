@@ -1,0 +1,29 @@
+# Build and Package Bibneat Studio Electron App
+
+name: Build and Package Electron App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        working-directory: './electron-app'
+        run: npm ci
+      - name: Build and package
+        working-directory: './electron-app'
+        run: npm run make
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bibneat-studio-${{ matrix.os }}
+          path: electron-app/out/make

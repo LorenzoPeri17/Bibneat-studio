@@ -24,11 +24,19 @@ module.exports = {
       platforms: ['darwin', 'win32', 'linux'],
     },
     {
+      name: '@electron-forge/maker-dmg',
+      config: {
+        format: 'ULFO',
+        icon: './assets/icons/mac/bibneat-studio.icns'
+      },
+      platforms: ['darwin'],
+    },
+    {
       name: '@electron-forge/maker-squirrel',
       config: {
         name: 'bibneat-studio',
-        iconUrl: 'https://raw.githubusercontent.com/LorenzoPeri17/Bibneat-studio/main/electron-app/assets/icons/win/icon.ico',
-        setupIcon: './assets/icons/win/icon.ico',
+        iconUrl: 'https://raw.githubusercontent.com/LorenzoPeri17/Bibneat-studio/main/electron-app/assets/icons/icon.ico',
+        setupIcon: './assets/icons/icon.ico',
         // Explicitly target x64 for Windows
         arch: 'x64'
       },
