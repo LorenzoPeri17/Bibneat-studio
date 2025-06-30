@@ -65,29 +65,30 @@ module.exports = {
       },
       platforms: ['linux'],
     },
-    {
-      name: '@electron-forge/maker-flatpak',
-      config: {
-        options: {
-          id: 'com.bibneat.studio',
-          productName: 'Bibneat Studio',
-          genericName: 'Bibliography Manager',
-          description: 'GUI for the bibneat C++/WASM library for managing BibTeX files',
-          categories: ['Office', 'Science'],
-          icon: './assets/icons/png/512x512.png',
-          maintainer: 'Lorenzo Peri',
-          homepage: 'https://github.com/LorenzoPeri17/Bibneat-studio',
-          repository: 'https://github.com/LorenzoPeri17/Bibneat-studio',
-          // Use modern Flatpak runtime versions
-          runtime: 'org.freedesktop.Platform',
-          runtimeVersion: '23.08',
-          sdk: 'org.freedesktop.Sdk',
-          base: 'org.electronjs.Electron2.BaseApp',
-          baseVersion: '23.08'
-        }
-      },
-      platforms: ['linux'],
-    },
+    // maker-flatpak consistently fails with generic errors..
+    // {
+    //   name: '@electron-forge/maker-flatpak',
+    //   config: {
+    //     options: {
+    //       id: 'com.bibneat.studio',
+    //       productName: 'Bibneat Studio',
+    //       genericName: 'Bibliography Manager',
+    //       description: 'GUI for the bibneat C++/WASM library for managing BibTeX files',
+    //       categories: ['Office', 'Science'],
+    //       icon: './assets/icons/png/512x512.png',
+    //       maintainer: 'Lorenzo Peri',
+    //       homepage: 'https://github.com/LorenzoPeri17/Bibneat-studio',
+    //       repository: 'https://github.com/LorenzoPeri17/Bibneat-studio',
+    //       // Use modern Flatpak runtime versions
+    //       runtime: 'org.freedesktop.Platform',
+    //       runtimeVersion: '23.08',
+    //       sdk: 'org.freedesktop.Sdk',
+    //       base: 'org.electronjs.Electron2.BaseApp',
+    //       baseVersion: '23.08'
+    //     }
+    //   },
+    //   platforms: ['linux'],
+    // },
   ],
   plugins: [
     new VitePlugin({
