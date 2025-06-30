@@ -78,7 +78,12 @@ module.exports = {
           maintainer: 'Lorenzo Peri',
           homepage: 'https://github.com/LorenzoPeri17/Bibneat-studio',
           repository: 'https://github.com/LorenzoPeri17/Bibneat-studio',
-          // Flatpak runtime configuration
+          // Use modern Flatpak runtime versions
+          runtime: 'org.freedesktop.Platform',
+          runtimeVersion: '23.08',
+          sdk: 'org.freedesktop.Sdk',
+          base: 'org.electronjs.Electron2.BaseApp',
+          baseVersion: '23.08'
         }
       },
       platforms: ['linux'],
